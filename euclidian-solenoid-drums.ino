@@ -68,6 +68,9 @@ int bpm = 120;
 unsigned long lastStepTime = 0;
 const int pulseDuration = 30;
 
+// Глобальный счетчик фазы (Global Phase)
+unsigned long globalStepCounter = 0;
+
 const int centerX = 30; 
 const int centerY = 32;
 const int hitInRadius = 18; const int hitOutRadius = 28;
@@ -130,6 +133,9 @@ void factoryReset() {
     }
     applyData();
     saveToEEPROM();
+    
+    // При сбросе обнуляем и глобальную фазу
+    globalStepCounter = 0;
     needRedraw = true;
 }
 
@@ -163,7 +169,6 @@ void setup() {
         applyData(); 
     }
     
-    // Применяем настроенное время удержания
     btnEb.setHoldTimeout(HOLD_TIME); 
     btnCh1.setHoldTimeout(HOLD_TIME);
     btnCh2.setHoldTimeout(HOLD_TIME);
@@ -195,7 +200,6 @@ void loop() {
 
     if (filteredPress) {
         if (encHoldTimer == 0) encHoldTimer = millis();
-        // Применяем настроенное время для сброса
         if (millis() - encHoldTimer > RESET_HOLD_TIME) {
             factoryReset();
             encHoldTimer = millis(); 
@@ -233,10 +237,7 @@ void loop() {
         int stepNKR = 1;
         int stepBPM = 1;
 
-        // Защита от дребезга (игнорируем слишком быстрые тики)
         if (currentTurnTime - lastTurnTime > ENC_DEBOUNCE_MS) {
-            
-            // Логика ускорения
             if (currentTurnTime - lastTurnTime < ENC_ACCEL_THRESHOLD) {
                 stepNKR = ENC_FAST_STEP;       
                 stepBPM = BPM_FAST_STEP;   
@@ -268,14 +269,19 @@ void loop() {
         needSave = false;
     }
 
+    // --- ГЛОБАЛЬНЫЙ СЕКВЕНСОР ---
     unsigned long currentTime = millis();
     unsigned long stepInterval = 60000 / (bpm * 4);
     
     if (currentTime - lastStepTime >= stepInterval) {
         lastStepTime = currentTime;
         
+        // Увеличиваем единый глобальный счетчик
+        globalStepCounter++;
+        
         for (int i = 0; i < NUM_CHANNELS; i++) {
-            channels[i].currentStep = (channels[i].currentStep + 1) % channels[i].n;
+            // Вычисляем текущий шаг канала на основе глобальной фазы
+            channels[i].currentStep = globalStepCounter % channels[i].n;
             
             if (channels[i].pattern[channels[i].currentStep] && !channels[i].isMuted) {
                 digitalWrite(channels[i].solPin, HIGH);
