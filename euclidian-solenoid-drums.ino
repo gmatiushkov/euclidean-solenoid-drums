@@ -4,6 +4,19 @@
 #include <EEPROM.h>
 #include <math.h>
 
+// ==========================================
+// --- НАСТРОЙКИ УПРАВЛЕНИЯ И ЭНКОДЕРА ---
+// ==========================================
+const int HOLD_TIME = 500;             // Время (мс) для долгого нажатия кнопок (Mute, переход в BPM)
+const int RESET_HOLD_TIME = 3000;      // Время (мс) удержания кнопки энкодера для сброса до заводских
+
+const int ENC_DEBOUNCE_MS = 15;        // Защита от дребезга (мс): игнорируем слишком быстрые ложные тики
+const int ENC_ACCEL_THRESHOLD = 80;    // Порог скорости (мс): тики быстрее этого времени включают ускорение
+
+const int ENC_FAST_STEP = 2;           // Шаг изменения параметров (N, K, R) при быстром вращении
+const int BPM_FAST_STEP = 10;          // Шаг изменения BPM при быстром вращении
+// ==========================================
+
 GyverOLED<SSD1306_128x64> oled;
 
 // --- ПИНЫ ЭНКОДЕРА ---
@@ -11,15 +24,14 @@ const int pinDT = 10;
 const int pinCLK = 11;
 const int pinSW = 12;
 
-EncButton eb(pinDT, pinCLK); // Энкодер (только вращение)
-VirtButton btnEb;            // Виртуальная кнопка (защищенная от аппаратного брака)
+EncButton eb(pinDT, pinCLK); 
+VirtButton btnEb;            
 
 Button btnCh1(16);
 Button btnCh2(17);
 
 const int NUM_CHANNELS = 2;
 
-// --- АРХИТЕКТУРА КАНАЛА ---
 struct Channel {
     int n = 16;      
     int k = 4;       
@@ -38,7 +50,6 @@ struct Channel {
 };
 Channel channels[NUM_CHANNELS];
 
-// --- СТРУКТУРА ДЛЯ СОХРАНЕНИЯ В ПАМЯТЬ ---
 struct SaveData {
     uint32_t magic; 
     int bpm;
@@ -65,9 +76,8 @@ const int stepInRadius = 22; const int stepOutRadius = 26;
 enum Mode { MODE_K, MODE_N, MODE_R, MODES_COUNT };
 int currentMode = MODE_K;
 bool inBpmMode = false; 
-bool needRedraw = true;
 
-// Флаг для удержания сброса до заводских
+volatile bool needRedraw = true;
 unsigned long encHoldTimer = 0;
 
 void generateEuclidean(int ch) {
@@ -80,14 +90,12 @@ void generateEuclidean(int ch) {
     }
 }
 
-// Запустить таймер умного сохранения
 void triggerSave() {
     needSave = true;
     lastChangeTime = millis();
     needRedraw = true;
 }
 
-// Физическая запись в память
 void saveToEEPROM() {
     data.bpm = bpm;
     for (int i = 0; i < NUM_CHANNELS; i++) {
@@ -100,7 +108,6 @@ void saveToEEPROM() {
     EEPROM.commit(); 
 }
 
-// Применение настроек из памяти
 void applyData() {
     bpm = constrain(data.bpm, 1, 300);
     for (int i = 0; i < NUM_CHANNELS; i++) {
@@ -112,7 +119,6 @@ void applyData() {
     }
 }
 
-// Сброс до заводских настроек
 void factoryReset() {
     data.magic = 0xABCD1234; 
     data.bpm = 120;
@@ -124,13 +130,6 @@ void factoryReset() {
     }
     applyData();
     saveToEEPROM();
-
-    oled.clear();
-    oled.setScale(2);
-    oled.setCursor(20, 3);
-    oled.print("RESET!");
-    oled.update();
-    delay(1000); 
     needRedraw = true;
 }
 
@@ -147,12 +146,10 @@ void toggleMute(int ch) {
     triggerSave();
 }
 
+// ==========================================
+// --- ЯДРО 0: ЛОГИКА, КНОПКИ, СЕКВЕНСОР ---
+// ==========================================
 void setup() {
-    Wire.setSDA(4); Wire.setSCL(5);
-    Wire.begin(); Wire.setClock(400000); 
-    oled.init();
-    
-    // Включаем подтяжку для энкодера
     pinMode(pinSW, INPUT_PULLUP);
     pinMode(pinDT, INPUT_PULLUP);
     pinMode(pinCLK, INPUT_PULLUP);
@@ -166,9 +163,10 @@ void setup() {
         applyData(); 
     }
     
-    btnEb.setHoldTimeout(500); 
-    btnCh1.setHoldTimeout(500);
-    btnCh2.setHoldTimeout(500);
+    // Применяем настроенное время удержания
+    btnEb.setHoldTimeout(HOLD_TIME); 
+    btnCh1.setHoldTimeout(HOLD_TIME);
+    btnCh2.setHoldTimeout(HOLD_TIME);
 
     channels[0].solPin = 15;
     channels[0].ledPin = 18;
@@ -184,6 +182,129 @@ void setup() {
     selectChannel(0); 
 }
 
+void loop() {
+    eb.tick();
+    btnCh1.tick();
+    btnCh2.tick();
+
+    bool isPhysicallyPressed = (digitalRead(pinSW) == LOW);
+    bool isAtDetent = (digitalRead(pinDT) == HIGH && digitalRead(pinCLK) == HIGH);
+    
+    bool filteredPress = isPhysicallyPressed && isAtDetent;
+    btnEb.tick(filteredPress);
+
+    if (filteredPress) {
+        if (encHoldTimer == 0) encHoldTimer = millis();
+        // Применяем настроенное время для сброса
+        if (millis() - encHoldTimer > RESET_HOLD_TIME) {
+            factoryReset();
+            encHoldTimer = millis(); 
+        }
+    } else {
+        encHoldTimer = 0;
+    }
+
+    if (btnCh1.click()) selectChannel(0);
+    if (btnCh2.click()) selectChannel(1);
+    if (btnCh1.hold()) toggleMute(0);
+    if (btnCh2.hold()) toggleMute(1);
+
+    if (btnEb.hold()) {
+        if (!inBpmMode) {
+            inBpmMode = true;
+            needRedraw = true;
+        }
+    }
+
+    if (btnEb.click()) {
+        if (inBpmMode) {
+            inBpmMode = false;
+        } else {
+            currentMode = (currentMode + 1) % MODES_COUNT; 
+        }
+        triggerSave();
+    }
+
+    if (eb.turn()) {
+        int dir = eb.dir();
+        
+        static unsigned long lastTurnTime = 0;
+        unsigned long currentTurnTime = millis();
+        int stepNKR = 1;
+        int stepBPM = 1;
+
+        // Защита от дребезга (игнорируем слишком быстрые тики)
+        if (currentTurnTime - lastTurnTime > ENC_DEBOUNCE_MS) {
+            
+            // Логика ускорения
+            if (currentTurnTime - lastTurnTime < ENC_ACCEL_THRESHOLD) {
+                stepNKR = ENC_FAST_STEP;       
+                stepBPM = BPM_FAST_STEP;   
+            }
+            
+            if (inBpmMode) {
+                bpm = constrain(bpm + dir * stepBPM, 1, 300); 
+            } else {
+                Channel &ch = channels[activeChannel]; 
+
+                if (currentMode == MODE_N) {
+                    ch.n = constrain(ch.n + dir * stepNKR, 2, 32);
+                    if (ch.k > ch.n) ch.k = ch.n;
+                    if (ch.r >= ch.n) ch.r = ch.n - 1; 
+                } else if (currentMode == MODE_K) {
+                    ch.k = constrain(ch.k + dir * stepNKR, 0, ch.n);
+                } else if (currentMode == MODE_R) {
+                    ch.r = constrain(ch.r + dir * stepNKR, 0, ch.n - 1); 
+                }
+                generateEuclidean(activeChannel); 
+            }
+            triggerSave();
+        }
+        lastTurnTime = currentTurnTime;
+    }
+
+    if (needSave && (millis() - lastChangeTime > 3000)) {
+        saveToEEPROM();
+        needSave = false;
+    }
+
+    unsigned long currentTime = millis();
+    unsigned long stepInterval = 60000 / (bpm * 4);
+    
+    if (currentTime - lastStepTime >= stepInterval) {
+        lastStepTime = currentTime;
+        
+        for (int i = 0; i < NUM_CHANNELS; i++) {
+            channels[i].currentStep = (channels[i].currentStep + 1) % channels[i].n;
+            
+            if (channels[i].pattern[channels[i].currentStep] && !channels[i].isMuted) {
+                digitalWrite(channels[i].solPin, HIGH);
+                channels[i].solActive = true;
+                channels[i].solTurnOffTime = currentTime + pulseDuration;
+            }
+        }
+        needRedraw = true; 
+    }
+
+    for (int i = 0; i < NUM_CHANNELS; i++) {
+        if (channels[i].solActive && (currentTime >= channels[i].solTurnOffTime)) {
+            digitalWrite(channels[i].solPin, LOW);
+            channels[i].solActive = false;
+        }
+    }
+}
+
+
+// ==========================================
+// --- ЯДРО 1: ИНТЕРФЕЙС И ЭКРАН (I2C) ---
+// ==========================================
+void setup1() {
+    Wire.setSDA(4); Wire.setSCL(5);
+    Wire.begin(); 
+    Wire.setClock(400000); 
+    oled.init();
+}
+
 void drawInterface() {
     oled.clear();
 
@@ -191,31 +312,30 @@ void drawInterface() {
 
     float angleStep = 2.0 * M_PI / ch.n;
     float arcLen = (2.0 * M_PI * 23.0) / ch.n;
-    float thickness = arcLen * 0.4;
-    if (thickness < 1.0) thickness = 1.0; 
-    if (thickness > 6.0) thickness = 6.0; 
+    float thickness = constrain(arcLen * 0.4, 1.0, 6.0);
     float halfW = thickness / 2.0;
 
     for (int i = 0; i < ch.n; i++) {
         float angle = i * angleStep - M_PI / 2.0;
+        float cosAng = cos(angle);
+        float sinAng = sin(angle);
 
         if (ch.pattern[i]) {
-            float perpAngle = angle + M_PI / 2.0;
-            float cosPerp = cos(perpAngle);
-            float sinPerp = sin(perpAngle);
+            float cosPerp = -sinAng; 
+            float sinPerp = cosAng;
 
             for (float d = -halfW; d <= halfW; d += 0.5) {
-                int x0 = centerX + round(hitInRadius * cos(angle) + d * cosPerp);
-                int y0 = centerY + round(hitInRadius * sin(angle) + d * sinPerp);
-                int x1 = centerX + round(hitOutRadius * cos(angle) + d * cosPerp);
-                int y1 = centerY + round(hitOutRadius * sin(angle) + d * sinPerp);
+                int x0 = centerX + round(hitInRadius * cosAng + d * cosPerp);
+                int y0 = centerY + round(hitInRadius * sinAng + d * sinPerp);
+                int x1 = centerX + round(hitOutRadius * cosAng + d * cosPerp);
+                int y1 = centerY + round(hitOutRadius * sinAng + d * sinPerp);
                 oled.line(x0, y0, x1, y1);
             }
         } else {
-            int x0 = centerX + round(stepInRadius * cos(angle));
-            int y0 = centerY + round(stepInRadius * sin(angle));
-            int x1 = centerX + round(stepOutRadius * cos(angle));
-            int y1 = centerY + round(stepOutRadius * sin(angle));
+            int x0 = centerX + round(stepInRadius * cosAng);
+            int y0 = centerY + round(stepInRadius * sinAng);
+            int x1 = centerX + round(stepOutRadius * cosAng);
+            int y1 = centerY + round(stepOutRadius * sinAng);
             oled.line(x0, y0, x1, y1);
         }
     }
@@ -265,122 +385,10 @@ void drawInterface() {
     oled.update();
 }
 
-void loop() {
-    eb.tick();
-    btnCh1.tick();
-    btnCh2.tick();
-
-    // ==========================================
-    // --- УМНЫЙ ФИЛЬТР ЭНКОДЕРА ---
-    // ==========================================
-    bool isPhysicallyPressed = (digitalRead(pinSW) == LOW);
-    bool isAtDetent = (digitalRead(pinDT) == HIGH && digitalRead(pinCLK) == HIGH);
-    
-    // Передаем сигнал дальше, только если вал стоит ровно!
-    bool filteredPress = isPhysicallyPressed && isAtDetent;
-    btnEb.tick(filteredPress);
-
-    // --- ЛОГИКА СБРОСА (Защищенная) ---
-    if (filteredPress) {
-        if (encHoldTimer == 0) encHoldTimer = millis();
-        if (millis() - encHoldTimer > 3000) {
-            factoryReset();
-            encHoldTimer = millis(); 
-        }
-    } else {
-        encHoldTimer = 0;
-    }
-
-    if (btnCh1.click()) selectChannel(0);
-    if (btnCh2.click()) selectChannel(1);
-    if (btnCh1.hold()) toggleMute(0);
-    if (btnCh2.hold()) toggleMute(1);
-
-    // Обрабатываем виртуальную кнопку энкодера
-    if (btnEb.hold()) {
-        if (!inBpmMode) {
-            inBpmMode = true;
-            needRedraw = true;
-        }
-    }
-
-    if (btnEb.click()) {
-        if (inBpmMode) {
-            inBpmMode = false;
-        } else {
-            currentMode = (currentMode + 1) % MODES_COUNT; 
-        }
-        triggerSave();
-    }
-
-    if (eb.turn()) {
-        int dir = eb.dir();
-        
-        static unsigned long lastTurnTime = 0;
-        unsigned long currentTurnTime = millis();
-        int encStep = 1;
-        int bpmStep = 1;
-
-        if (currentTurnTime - lastTurnTime < 80) {
-            encStep = 4;       
-            bpmStep = 15;   
-        }
-        lastTurnTime = currentTurnTime;
-        
-        if (inBpmMode) {
-            bpm = constrain(bpm + dir * bpmStep, 1, 300); 
-        } else {
-            Channel &ch = channels[activeChannel]; 
-
-            if (currentMode == MODE_N) {
-                ch.n = constrain(ch.n + dir * encStep, 2, 32);
-                if (ch.k > ch.n) ch.k = ch.n;
-                if (ch.r >= ch.n) ch.r = ch.n - 1; 
-            } else if (currentMode == MODE_K) {
-                ch.k = constrain(ch.k + dir * encStep, 0, ch.n);
-            } else if (currentMode == MODE_R) {
-                ch.r = constrain(ch.r + dir * encStep, 0, ch.n - 1); 
-            }
-            generateEuclidean(activeChannel); 
-        }
-        triggerSave();
-    }
-
-    // --- ФОНОВОЕ СОХРАНЕНИЕ ---
-    if (needSave && (millis() - lastChangeTime > 3000)) {
-        saveToEEPROM();
-        needSave = false;
-    }
-
-    // --- ГЛОБАЛЬНЫЙ СЕКВЕНСОР ---
-    unsigned long currentTime = millis();
-    unsigned long stepInterval = 60000 / (bpm * 4);
-    
-    if (currentTime - lastStepTime >= stepInterval) {
-        lastStepTime = currentTime;
-        
-        for (int i = 0; i < NUM_CHANNELS; i++) {
-            channels[i].currentStep = (channels[i].currentStep + 1) % channels[i].n;
-            
-            if (channels[i].pattern[channels[i].currentStep] && !channels[i].isMuted) {
-                digitalWrite(channels[i].solPin, HIGH);
-                channels[i].solActive = true;
-                channels[i].solTurnOffTime = currentTime + pulseDuration;
-            }
-        }
-        needRedraw = true; 
-    }
-
-    // --- АСИНХРОННОЕ ВЫКЛЮЧЕНИЕ ---
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        if (channels[i].solActive && (currentTime >= channels[i].solTurnOffTime)) {
-            digitalWrite(channels[i].solPin, LOW);
-            channels[i].solActive = false;
-        }
-    }
-
+void loop1() {
     if (needRedraw) {
         drawInterface();
         needRedraw = false;
     }
+    delay(20); 
 }
