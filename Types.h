@@ -41,7 +41,16 @@ struct Channel {
     int ledPin;      
     bool solActive = false;
     unsigned long solTurnOffTime = 0;
+    
+    unsigned long lastStepTime = 0;
+    unsigned long absoluteStep = 0; // Идеальная математическая фаза
     bool isMuted = false; 
+    
+    int shuffle = 0;       
+    int paramA = 0;        
+    int paramB = 0;        
+    int paramC = 0;        
+    int paramD = 0;        
 };
 
 struct SaveData {
@@ -51,6 +60,11 @@ struct SaveData {
     int k[NUM_CHANNELS];
     int r[NUM_CHANNELS];
     bool isMuted[NUM_CHANNELS];
+    int shuffle[NUM_CHANNELS];
+    int paramA[NUM_CHANNELS];
+    int paramB[NUM_CHANNELS];
+    int paramC[NUM_CHANNELS];
+    int paramD[NUM_CHANNELS];
 };
 
 enum Mode { MODE_K, MODE_N, MODE_R, MODES_COUNT };
@@ -85,3 +99,6 @@ extern bool inBpmMode;
 extern volatile bool needRedraw;
 extern unsigned long encHoldTimer;
 extern UI_State currentScreen;
+extern int menuIndex;
+extern bool menuEditMode;
+extern unsigned long menuBlinkTimer;
