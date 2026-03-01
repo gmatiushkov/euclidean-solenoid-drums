@@ -38,7 +38,8 @@ inline void applyData() {
 }
 
 inline void factoryReset() {
-    data.magic = 0xABCD1234; 
+    // ИЗМЕНЕНО: Обновлено магическое число для 4-х каналов
+    data.magic = 0xABCD1235; 
     data.bpm = 120;
     for (int i = 0; i < NUM_CHANNELS; i++) {
         data.n[i] = 16;
@@ -58,7 +59,7 @@ inline void factoryReset() {
     globalStepCounter = 0;
     for (int i = 0; i < NUM_CHANNELS; i++) {
         channels[i].lastStepTime = 0;
-        channels[i].absoluteStep = 0; // Сброс глобальной фазы
+        channels[i].absoluteStep = 0; 
     }
     needRedraw = true;
 }

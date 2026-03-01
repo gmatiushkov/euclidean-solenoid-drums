@@ -9,8 +9,11 @@
 GyverOLED<SSD1306_128x64> oled;
 EncButton eb(pinDT, pinCLK); 
 VirtButton btnEb;            
+// ИЗМЕНЕНО: Инициализация кнопок по новому пинауту
 Button btnCh1(16);
-Button btnCh2(17);
+Button btnCh2(18);
+Button btnCh3(20);
+Button btnCh4(22);
 
 Channel channels[NUM_CHANNELS];
 SaveData data;
@@ -35,7 +38,7 @@ unsigned long menuBlinkTimer = 0;
 void setup() {
     Serial.begin(115200);
     delay(100);
-    Serial.println("\n--- Euclidean Drum Machine Boot ---");
+    Serial.println("\n--- Euclidean Drum Machine Boot (4 Channels) ---");
 
     pinMode(pinSW, INPUT_PULLUP);
     pinMode(pinDT, INPUT_PULLUP);
@@ -44,8 +47,9 @@ void setup() {
     EEPROM.begin(512);
     EEPROM.get(0, data);
     
-    if (data.magic != 0xABCD1234) {
-        Serial.println("[EEPROM] Formatting...");
+    // ИЗМЕНЕНО: Проверка нового магического числа
+    if (data.magic != 0xABCD1235) {
+        Serial.println("[EEPROM] Formatting for 4 channels...");
         factoryReset(); 
     } else {
         Serial.println("[EEPROM] Loaded.");
@@ -55,11 +59,14 @@ void setup() {
     btnEb.setHoldTimeout(HOLD_TIME); 
     btnCh1.setHoldTimeout(HOLD_TIME);
     btnCh2.setHoldTimeout(HOLD_TIME);
+    btnCh3.setHoldTimeout(HOLD_TIME);
+    btnCh4.setHoldTimeout(HOLD_TIME);
 
-    channels[0].solPin = 15;
-    channels[0].ledPin = 18;
-    channels[1].solPin = 14;
-    channels[1].ledPin = 19;
+    // ИЗМЕНЕНО: Новый пинаут соленоидов и светодиодов
+    channels[0].solPin = 3; channels[0].ledPin = 17;
+    channels[1].solPin = 2; channels[1].ledPin = 19;
+    channels[2].solPin = 1; channels[2].ledPin = 21;
+    channels[3].solPin = 0; channels[3].ledPin = 26;
 
     unsigned long t = millis();
     for (int i = 0; i < NUM_CHANNELS; i++) {
@@ -78,6 +85,8 @@ void loop() {
     eb.tick();
     btnCh1.tick();
     btnCh2.tick();
+    btnCh3.tick();
+    btnCh4.tick();
 
     bool isPhysicallyPressed = (digitalRead(pinSW) == LOW);
     bool isAtDetent = (digitalRead(pinDT) == HIGH && digitalRead(pinCLK) == HIGH);
@@ -96,50 +105,45 @@ void loop() {
     }
 
     // --- УПРАВЛЕНИЕ КНОПКАМИ КАНАЛОВ ---
+    // Канал 1
     static bool ch1WasHeld = false;
-    
-    if (btnCh1.press()) { 
-        selectChannel(0); 
-        Serial.println("[UI] Ch1 Press -> INSTANT SWITCH");
-    }
-    if (btnCh1.hold()) { 
-        toggleMute(0); 
-        ch1WasHeld = true; 
-        Serial.println("[UI] Ch1 Hold -> MUTE TOGGLED"); 
-    }
+    if (btnCh1.press()) { selectChannel(0); Serial.println("[UI] Ch1 Press"); }
+    if (btnCh1.hold()) { toggleMute(0); ch1WasHeld = true; Serial.println("[UI] Ch1 Mute Toggled"); }
     if (btnCh1.release()) {
-        if (!ch1WasHeld && currentScreen != SCREEN_MAIN) { 
-            currentScreen = SCREEN_MAIN; needRedraw = true; 
-            Serial.println("[UI] Ch1 Release -> EXIT MENU"); 
-        }
+        if (!ch1WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; Serial.println("[UI] Ch1 Exit Menu"); }
         ch1WasHeld = false; 
     }
-    if (btnCh1.hasClicks(2)) { 
-        currentScreen = SCREEN_CH_SETTINGS; activeChannel = 0; menuIndex = 0; menuEditMode = false; needRedraw = true; 
-        Serial.println("[UI] Ch1 Double Click -> ENTER MENU");
-    }
+    if (btnCh1.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 0; menuIndex = 0; menuEditMode = false; needRedraw = true; Serial.println("[UI] Ch1 Menu"); }
 
+    // Канал 2
     static bool ch2WasHeld = false;
-    if (btnCh2.press()) { 
-        selectChannel(1); 
-        Serial.println("[UI] Ch2 Press -> INSTANT SWITCH");
-    }
-    if (btnCh2.hold()) { 
-        toggleMute(1); 
-        ch2WasHeld = true; 
-        Serial.println("[UI] Ch2 Hold -> MUTE TOGGLED"); 
-    }
+    if (btnCh2.press()) { selectChannel(1); Serial.println("[UI] Ch2 Press"); }
+    if (btnCh2.hold()) { toggleMute(1); ch2WasHeld = true; Serial.println("[UI] Ch2 Mute Toggled"); }
     if (btnCh2.release()) {
-        if (!ch2WasHeld && currentScreen != SCREEN_MAIN) { 
-            currentScreen = SCREEN_MAIN; needRedraw = true; 
-            Serial.println("[UI] Ch2 Release -> EXIT MENU"); 
-        }
+        if (!ch2WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; Serial.println("[UI] Ch2 Exit Menu"); }
         ch2WasHeld = false;
     }
-    if (btnCh2.hasClicks(2)) { 
-        currentScreen = SCREEN_CH_SETTINGS; activeChannel = 1; menuIndex = 0; menuEditMode = false; needRedraw = true; 
-        Serial.println("[UI] Ch2 Double Click -> ENTER MENU");
+    if (btnCh2.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 1; menuIndex = 0; menuEditMode = false; needRedraw = true; Serial.println("[UI] Ch2 Menu"); }
+
+    // Канал 3
+    static bool ch3WasHeld = false;
+    if (btnCh3.press()) { selectChannel(2); Serial.println("[UI] Ch3 Press"); }
+    if (btnCh3.hold()) { toggleMute(2); ch3WasHeld = true; Serial.println("[UI] Ch3 Mute Toggled"); }
+    if (btnCh3.release()) {
+        if (!ch3WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; Serial.println("[UI] Ch3 Exit Menu"); }
+        ch3WasHeld = false;
     }
+    if (btnCh3.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 2; menuIndex = 0; menuEditMode = false; needRedraw = true; Serial.println("[UI] Ch3 Menu"); }
+
+    // Канал 4
+    static bool ch4WasHeld = false;
+    if (btnCh4.press()) { selectChannel(3); Serial.println("[UI] Ch4 Press"); }
+    if (btnCh4.hold()) { toggleMute(3); ch4WasHeld = true; Serial.println("[UI] Ch4 Mute Toggled"); }
+    if (btnCh4.release()) {
+        if (!ch4WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; Serial.println("[UI] Ch4 Exit Menu"); }
+        ch4WasHeld = false;
+    }
+    if (btnCh4.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 3; menuIndex = 0; menuEditMode = false; needRedraw = true; Serial.println("[UI] Ch4 Menu"); }
 
     // --- УПРАВЛЕНИЕ ЭНКОДЕРОМ ---
     if (btnEb.hold()) {
@@ -166,8 +170,6 @@ void loop() {
         int dir = eb.dir();
         static unsigned long lastTurnTime = 0;
         unsigned long currentTurnTime = millis();
-        
-        // ШАГ МЕНЮ ТЕПЕРЬ ИДЕНТИЧЕН ГЛАВНОМУ ЭКРАНУ (1 или ускоренный)
         int stepNKR = 1, stepBPM = 1, stepMenu = 1;
 
         if (currentTurnTime - lastTurnTime > ENC_DEBOUNCE_MS) {

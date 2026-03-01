@@ -20,7 +20,8 @@ const int pinDT = 10;
 const int pinCLK = 11;
 const int pinSW = 12;
 
-const int NUM_CHANNELS = 2;
+// ИЗМЕНЕНО: Теперь 4 канала
+const int NUM_CHANNELS = 4;
 
 // Константы отрисовки
 const int centerX = 30; 
@@ -43,7 +44,7 @@ struct Channel {
     unsigned long solTurnOffTime = 0;
     
     unsigned long lastStepTime = 0;
-    unsigned long absoluteStep = 0; // Идеальная математическая фаза
+    unsigned long absoluteStep = 0; 
     bool isMuted = false; 
     
     int shuffle = 0;       
@@ -69,7 +70,6 @@ struct SaveData {
 
 enum Mode { MODE_K, MODE_N, MODE_R, MODES_COUNT };
 
-// НОВОЕ: Состояния интерфейса
 enum UI_State {
     SCREEN_MAIN,
     SCREEN_CH_SETTINGS,
@@ -84,6 +84,9 @@ extern EncButton eb;
 extern VirtButton btnEb;            
 extern Button btnCh1;
 extern Button btnCh2;
+// ИЗМЕНЕНО: Добавлены новые кнопки
+extern Button btnCh3;
+extern Button btnCh4;
 
 extern Channel channels[NUM_CHANNELS];
 extern SaveData data;

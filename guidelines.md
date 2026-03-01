@@ -31,24 +31,30 @@
 
 | Компонент     | Тип     | GPIO (Pico) | Примечание              |
 |---------------|---------|-------------|-------------------------|
-| I2C SDA      | Display | 4          | OLED SSD1306            |
-| I2C SCL      | Display | 5          | OLED SSD1306            |
-| Encoder DT   | Input   | 10         | Подтяжка INPUT_PULLUP   |
-| Encoder CLK  | Input   | 11         | Подтяжка INPUT_PULLUP   |
-| Encoder SW   | Input   | 12         | Кнопка энкодера         |
-| Channel 1 Btn| Input   | 16         | Выбор/Mute Ch 1         |
-| Channel 2 Btn| Input   | 17         | Выбор/Mute Ch 2         |
-| Solenoid 1   | Output  | 15         | Через MOSFET (Logic Level) |
-| Solenoid 2   | Output  | 14         | Через MOSFET (Logic Level) |
-| LED 1        | Output  | 18         | Индикация выбора Ch 1   |
-| LED 2        | Output  | 19         | Индикация выбора Ch 2   |
+| I2C SDA       | Display | 4           | OLED SSD1306            |
+| I2C SCL       | Display | 5           | OLED SSD1306            |
+| Encoder DT    | Input   | 10          | Подтяжка INPUT_PULLUP   |
+| Encoder CLK   | Input   | 11          | Подтяжка INPUT_PULLUP   |
+| Encoder SW    | Input   | 12          | Кнопка энкодера         |
+| Channel 1 Btn | Input   | 16          | Выбор/Mute/Menu Ch 1    |
+| Channel 1 LED | Output  | 17          | Индикация выбора Ch 1   |
+| Channel 1 Sol | Output  | 3           | Через MOSFET            |
+| Channel 2 Btn | Input   | 18          | Выбор/Mute/Menu Ch 2    |
+| Channel 2 LED | Output  | 19          | Индикация выбора Ch 2   |
+| Channel 2 Sol | Output  | 2           | Через MOSFET            |
+| Channel 3 Btn | Input   | 20          | Выбор/Mute/Menu Ch 3    |
+| Channel 3 LED | Output  | 21          | Индикация выбора Ch 3   |
+| Channel 3 Sol | Output  | 1           | Через MOSFET            |
+| Channel 4 Btn | Input   | 22          | Выбор/Mute/Menu Ch 4    |
+| Channel 4 LED | Output  | 26          | Индикация выбора Ch 4   |
+| Channel 4 Sol | Output  | 0           | Через MOSFET            |
 
 ## 5. Current State (v1.2 - Advanced UI & Timing)
 
 Реализовано:
 
 - Модульная структура проекта (разбиение на .h файлы).
-- Двухканальный независимый секвенсор с параметром Shuffle (-50 до +50).
+- 4-канальный независимый секвенсор с параметром Shuffle (-50 до +50).
 - Трехуровневая система интерфейса (FSM: `SCREEN_MAIN`, `SCREEN_CH_SETTINGS`, `SCREEN_GLOBAL`).
 - Мгновенный отклик UI (нулевая задержка кнопок при выборе канала через `.press()`).
 - Кастомная попиксельная отрисовка списков меню с динамической инверсией выделения (ровно 10 символов в строке, идеальный стык текста).
