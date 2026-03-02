@@ -1,6 +1,6 @@
 #pragma once
 #include "Types.h"
-#include "Sequencer.h" // Нужен для generateEuclidean()
+#include "Sequencer.h"
 
 inline void saveToEEPROM() {
     data.bpm = bpm;
@@ -10,11 +10,11 @@ inline void saveToEEPROM() {
         data.r[i] = channels[i].r;
         data.isMuted[i] = channels[i].isMuted;
         
+        data.velo[i] = channels[i].velo;
+        data.human[i] = channels[i].human;
         data.shuffle[i] = channels[i].shuffle;
-        data.paramA[i] = channels[i].paramA;
-        data.paramB[i] = channels[i].paramB;
-        data.paramC[i] = channels[i].paramC;
-        data.paramD[i] = channels[i].paramD;
+        data.pulse[i] = channels[i].pulse;
+        data.base[i] = channels[i].base;
     }
     EEPROM.put(0, data);
     EEPROM.commit(); 
@@ -28,18 +28,18 @@ inline void applyData() {
         channels[i].r = constrain(data.r[i], 0, 31);
         channels[i].isMuted = data.isMuted[i];
         
+        channels[i].velo = constrain(data.velo[i], 0, 127);
+        channels[i].human = constrain(data.human[i], 0, 127);
         channels[i].shuffle = constrain(data.shuffle[i], -50, 50);
-        channels[i].paramA = constrain(data.paramA[i], 0, 127);
-        channels[i].paramB = constrain(data.paramB[i], 0, 127);
-        channels[i].paramC = constrain(data.paramC[i], 0, 127);
-        channels[i].paramD = constrain(data.paramD[i], 0, 127);
+        channels[i].pulse = constrain(data.pulse[i], 1, 200);
+        channels[i].base = constrain(data.base[i], 0, 255);
         generateEuclidean(i);
     }
 }
 
 inline void factoryReset() {
-    // ИЗМЕНЕНО: Обновлено магическое число для 4-х каналов
-    data.magic = 0xABCD1235; 
+    // Новое магическое число для принудительного обновления
+    data.magic = 0xABCD1238; 
     data.bpm = 120;
     for (int i = 0; i < NUM_CHANNELS; i++) {
         data.n[i] = 16;
@@ -47,11 +47,11 @@ inline void factoryReset() {
         data.r[i] = 0;
         data.isMuted[i] = false;
         
+        data.velo[i] = 127;
+        data.human[i] = 0;
         data.shuffle[i] = 0;
-        data.paramA[i] = 0;
-        data.paramB[i] = 0;
-        data.paramC[i] = 0;
-        data.paramD[i] = 0;
+        data.pulse[i] = 30;
+        data.base[i] = 150;
     }
     applyData();
     saveToEEPROM();

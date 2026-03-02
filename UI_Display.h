@@ -70,8 +70,7 @@ inline void drawMainScreen() {
     oled.invertText(false);
 }
 
-// --- Универсальная функция отрисовки списков меню ---
-inline void drawMenuList(const char* items[], int values[], int totalItems, bool showPlusOnFirst) {
+inline void drawMenuList(const char* items[], int values[], int totalItems, int plusIndex) {
     int startIdx = menuIndex > 2 ? menuIndex - 2 : 0;
     if (startIdx > totalItems - 3) startIdx = totalItems - 3; 
 
@@ -82,13 +81,11 @@ inline void drawMenuList(const char* items[], int values[], int totalItems, bool
         int row = 2 + (i * 2); 
         bool isSelected = (itemIdx == menuIndex);
         
-        // 1. Формируем левую часть
         char tempName[8];
-        strncpy(tempName, items[itemIdx], 5);
-        tempName[5] = '\0';
+        strncpy(tempName, items[itemIdx], 6); // Берем до 6 символов (например shuffl)
+        tempName[6] = '\0';
         strcat(tempName, ":");
         
-        // Выравниваем строго до 6 символов
         char leftBuf[8];
         snprintf(leftBuf, sizeof(leftBuf), "%-6s", tempName);
         
@@ -98,9 +95,8 @@ inline void drawMenuList(const char* items[], int values[], int totalItems, bool
         oled.print(leftBuf);
         oled.invertText(false);
         
-        // 2. Форматируем правую часть (строго 3 символа)
         char valBuf[6];
-        if (itemIdx == 0 && showPlusOnFirst && values[itemIdx] > 0) {
+        if (itemIdx == plusIndex && values[itemIdx] > 0) {
             snprintf(valBuf, sizeof(valBuf), "+%d", values[itemIdx]);
         } else {
             snprintf(valBuf, sizeof(valBuf), "%d", values[itemIdx]);
@@ -120,7 +116,6 @@ inline void drawMenuList(const char* items[], int values[], int totalItems, bool
         oled.invertText(false);
     }
     
-    // Скроллбар
     if (startIdx > 0) {
         oled.line(4, 23, 4, 23);
         oled.line(3, 24, 5, 24);
@@ -141,13 +136,12 @@ inline void drawChannelMenu() {
     oled.setCursor(0, 0);
     oled.print("ch "); oled.print(activeChannel + 1); oled.print(" edit");
 
-    const char* items[] = {"shuffle", "param a", "param b", "param c", "param d"};
-    int values[] = {ch.shuffle, ch.paramA, ch.paramB, ch.paramC, ch.paramD};
+    const char* items[] = {"velo", "human", "shuff", "pulse", "base"};
+    int values[] = {ch.velo, ch.human, ch.shuffle, ch.pulse, ch.base};
     
-    // Передаем true, чтобы у shuffle рисовался плюс, если значение больше нуля
-    drawMenuList(items, values, 5, true);
+    // Передаем 5, индекс плюса = 2 (shuffle)
+    drawMenuList(items, values, 5, 2);
 }
-
 
 inline void drawGlobalMenu() {
     oled.setCursor(0, 0);
@@ -156,8 +150,7 @@ inline void drawGlobalMenu() {
     const char* items[] = {"bpm", "global a", "global b"};
     int values[] = {bpm, 0, 0};
 
-    // Передаем false, так как плюсы перед значениями (вроде BPM) здесь не нужны
-    drawMenuList(items, values, 3, false);
+    drawMenuList(items, values, 3, -1);
 }
 
 inline void drawInterface() {

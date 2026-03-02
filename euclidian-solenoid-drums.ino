@@ -9,7 +9,6 @@
 GyverOLED<SSD1306_128x64> oled;
 EncButton eb(pinDT, pinCLK); 
 VirtButton btnEb;            
-// ИЗМЕНЕНО: Инициализация кнопок по новому пинауту
 Button btnCh1(16);
 Button btnCh2(18);
 Button btnCh3(20);
@@ -47,8 +46,7 @@ void setup() {
     EEPROM.begin(512);
     EEPROM.get(0, data);
     
-    // ИЗМЕНЕНО: Проверка нового магического числа
-    if (data.magic != 0xABCD1235) {
+    if (data.magic != 0xABCD1237) {
         Serial.println("[EEPROM] Formatting for 4 channels...");
         factoryReset(); 
     } else {
@@ -62,7 +60,6 @@ void setup() {
     btnCh3.setHoldTimeout(HOLD_TIME);
     btnCh4.setHoldTimeout(HOLD_TIME);
 
-    // ИЗМЕНЕНО: Новый пинаут соленоидов и светодиодов
     channels[0].solPin = 3; channels[0].ledPin = 17;
     channels[1].solPin = 2; channels[1].ledPin = 19;
     channels[2].solPin = 1; channels[2].ledPin = 21;
@@ -71,7 +68,7 @@ void setup() {
     unsigned long t = millis();
     for (int i = 0; i < NUM_CHANNELS; i++) {
         pinMode(channels[i].solPin, OUTPUT);
-        digitalWrite(channels[i].solPin, LOW);
+        digitalWrite(channels[i].solPin, LOW); 
         pinMode(channels[i].ledPin, OUTPUT);
         channels[i].lastStepTime = t;
         channels[i].absoluteStep = 0;
@@ -105,54 +102,66 @@ void loop() {
     }
 
     // --- УПРАВЛЕНИЕ КНОПКАМИ КАНАЛОВ ---
-    // Канал 1
     static bool ch1WasHeld = false;
-    if (btnCh1.press()) { selectChannel(0); Serial.println("[UI] Ch1 Press"); }
-    if (btnCh1.hold()) { toggleMute(0); ch1WasHeld = true; Serial.println("[UI] Ch1 Mute Toggled"); }
+    if (btnCh1.press()) { selectChannel(0); }
+    if (btnCh1.hold()) { toggleMute(0); ch1WasHeld = true; }
     if (btnCh1.release()) {
-        if (!ch1WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; Serial.println("[UI] Ch1 Exit Menu"); }
+        if (!ch1WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; }
         ch1WasHeld = false; 
     }
-    if (btnCh1.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 0; menuIndex = 0; menuEditMode = false; needRedraw = true; Serial.println("[UI] Ch1 Menu"); }
+    if (btnCh1.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 0; menuIndex = 0; menuEditMode = false; needRedraw = true; }
 
-    // Канал 2
     static bool ch2WasHeld = false;
-    if (btnCh2.press()) { selectChannel(1); Serial.println("[UI] Ch2 Press"); }
-    if (btnCh2.hold()) { toggleMute(1); ch2WasHeld = true; Serial.println("[UI] Ch2 Mute Toggled"); }
+    if (btnCh2.press()) { selectChannel(1); }
+    if (btnCh2.hold()) { toggleMute(1); ch2WasHeld = true; }
     if (btnCh2.release()) {
-        if (!ch2WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; Serial.println("[UI] Ch2 Exit Menu"); }
+        if (!ch2WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; }
         ch2WasHeld = false;
     }
-    if (btnCh2.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 1; menuIndex = 0; menuEditMode = false; needRedraw = true; Serial.println("[UI] Ch2 Menu"); }
+    if (btnCh2.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 1; menuIndex = 0; menuEditMode = false; needRedraw = true; }
 
-    // Канал 3
     static bool ch3WasHeld = false;
-    if (btnCh3.press()) { selectChannel(2); Serial.println("[UI] Ch3 Press"); }
-    if (btnCh3.hold()) { toggleMute(2); ch3WasHeld = true; Serial.println("[UI] Ch3 Mute Toggled"); }
+    if (btnCh3.press()) { selectChannel(2); }
+    if (btnCh3.hold()) { toggleMute(2); ch3WasHeld = true; }
     if (btnCh3.release()) {
-        if (!ch3WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; Serial.println("[UI] Ch3 Exit Menu"); }
+        if (!ch3WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; }
         ch3WasHeld = false;
     }
-    if (btnCh3.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 2; menuIndex = 0; menuEditMode = false; needRedraw = true; Serial.println("[UI] Ch3 Menu"); }
+    if (btnCh3.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 2; menuIndex = 0; menuEditMode = false; needRedraw = true; }
 
-    // Канал 4
     static bool ch4WasHeld = false;
-    if (btnCh4.press()) { selectChannel(3); Serial.println("[UI] Ch4 Press"); }
-    if (btnCh4.hold()) { toggleMute(3); ch4WasHeld = true; Serial.println("[UI] Ch4 Mute Toggled"); }
+    if (btnCh4.press()) { selectChannel(3); }
+    if (btnCh4.hold()) { toggleMute(3); ch4WasHeld = true; }
     if (btnCh4.release()) {
-        if (!ch4WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; Serial.println("[UI] Ch4 Exit Menu"); }
+        if (!ch4WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; }
         ch4WasHeld = false;
     }
-    if (btnCh4.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 3; menuIndex = 0; menuEditMode = false; needRedraw = true; Serial.println("[UI] Ch4 Menu"); }
+    if (btnCh4.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 3; menuIndex = 0; menuEditMode = false; needRedraw = true; }
 
     // --- УПРАВЛЕНИЕ ЭНКОДЕРОМ ---
     if (btnEb.hold()) {
         if (currentScreen == SCREEN_MAIN) {
             currentScreen = SCREEN_GLOBAL; menuIndex = 0; menuEditMode = false; needRedraw = true;
             Serial.println("[UI] Enc Hold -> GLOBAL MENU");
-        } else {
-            currentScreen = SCREEN_MAIN; needRedraw = true; 
-            Serial.println("[UI] Enc Hold -> EXIT TO MAIN");
+        } 
+        else if (currentScreen == SCREEN_CH_SETTINGS) {
+            // Сброс текущего пункта меню к НОВЫМ стандартным значениям
+            Channel &ch = channels[activeChannel];
+            if (menuIndex == 0) ch.velo = 127;
+            else if (menuIndex == 1) ch.human = 0;
+            else if (menuIndex == 2) ch.shuffle = 0;
+            else if (menuIndex == 3) ch.pulse = 30;
+            else if (menuIndex == 4) ch.base = 150;
+            
+            triggerSave();
+            needRedraw = true;
+            Serial.println("[UI] Enc Hold -> RESET PARAM TO DEFAULT");
+        } 
+        else if (currentScreen == SCREEN_GLOBAL) {
+            if (menuIndex == 0) bpm = 120;
+            triggerSave();
+            needRedraw = true;
+            Serial.println("[UI] Enc Hold -> RESET GLOBAL PARAM");
         }
     }
 
@@ -176,7 +185,7 @@ void loop() {
             if (currentTurnTime - lastTurnTime < ENC_ACCEL_THRESHOLD) {
                 stepNKR = ENC_FAST_STEP; 
                 stepBPM = BPM_FAST_STEP; 
-                stepMenu = ENC_FAST_STEP;   
+                stepMenu = 5; // Ускорение для меню (удобно для 0-127 и 0-255)
             }
             
             if (currentScreen == SCREEN_MAIN) {
@@ -195,14 +204,14 @@ void loop() {
             } 
             else if (currentScreen == SCREEN_CH_SETTINGS) {
                 if (!menuEditMode) {
-                    menuIndex = constrain(menuIndex + dir, 0, 4);
+                    menuIndex = constrain(menuIndex + dir, 0, 4); // 5 пунктов (0..4)
                 } else {
                     Channel &ch = channels[activeChannel];
-                    if (menuIndex == 0) ch.shuffle = constrain(ch.shuffle + dir * stepMenu, -50, 50);
-                    else if (menuIndex == 1) ch.paramA = constrain(ch.paramA + dir * stepMenu, 0, 127);
-                    else if (menuIndex == 2) ch.paramB = constrain(ch.paramB + dir * stepMenu, 0, 127);
-                    else if (menuIndex == 3) ch.paramC = constrain(ch.paramC + dir * stepMenu, 0, 127);
-                    else if (menuIndex == 4) ch.paramD = constrain(ch.paramD + dir * stepMenu, 0, 127);
+                    if (menuIndex == 0) ch.velo = constrain(ch.velo + dir * stepMenu, 0, 127);
+                    else if (menuIndex == 1) ch.human = constrain(ch.human + dir * stepMenu, 0, 127);
+                    else if (menuIndex == 2) ch.shuffle = constrain(ch.shuffle + dir * stepMenu, -50, 50);
+                    else if (menuIndex == 3) ch.pulse = constrain(ch.pulse + dir * stepMenu, 1, 200);
+                    else if (menuIndex == 4) ch.base = constrain(ch.base + dir * stepMenu, 0, 255);
                     triggerSave();
                 }
             } 
@@ -251,9 +260,41 @@ void loop() {
             if (i == 0) globalStepCounter++;
             
             if (channels[i].pattern[channels[i].currentStep] && !channels[i].isMuted) {
-                digitalWrite(channels[i].solPin, HIGH);
+                
+                int pwm = 0;
+                // Проверяем, находимся ли мы сейчас в режиме калибровки base для этого канала
+                bool isEditingBase = (currentScreen == SCREEN_CH_SETTINGS && menuIndex == 4 && menuEditMode && activeChannel == i);
+
+                if (isEditingBase) {
+                    // Во время калибровки подаем строго значение base (отключаем velo и human)
+                    pwm = channels[i].base;
+                } else {
+                    // Обычный игровой режим
+                    int min_v = max(0, channels[i].velo - channels[i].human);
+                    int max_v = min(127, channels[i].velo + channels[i].human);
+                    int actual_velo = random(min_v, max_v + 1); 
+                    
+                    if (actual_velo == 0) {
+                        pwm = 0; 
+                    } else if (actual_velo >= 127) {
+                        pwm = 255; 
+                    } else {
+                        // Маппинг: MIDI velo (1..126) распределяется от откалиброванного base до 254
+                        pwm = map(actual_velo, 1, 126, channels[i].base, 254);
+                    }
+                }
+
+                // Логика физического вывода
+                if (pwm >= 255) {
+                    digitalWrite(channels[i].solPin, HIGH); 
+                } else if (pwm == 0) {
+                    digitalWrite(channels[i].solPin, LOW); 
+                } else {
+                    analogWrite(channels[i].solPin, pwm); 
+                }
+                
                 channels[i].solActive = true;
-                channels[i].solTurnOffTime = currentTime + pulseDuration;
+                channels[i].solTurnOffTime = currentTime + channels[i].pulse;
             }
             stepChanged = true; 
         }
@@ -261,9 +302,11 @@ void loop() {
 
     if (stepChanged && currentScreen == SCREEN_MAIN) needRedraw = true;
 
+    // Асинхронное выключение соленоидов
     for (int i = 0; i < NUM_CHANNELS; i++) {
         if (channels[i].solActive && (currentTime >= channels[i].solTurnOffTime)) {
-            digitalWrite(channels[i].solPin, LOW);
+            analogWrite(channels[i].solPin, 0); 
+            digitalWrite(channels[i].solPin, LOW); 
             channels[i].solActive = false;
         }
     }
