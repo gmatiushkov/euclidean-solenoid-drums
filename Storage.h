@@ -4,6 +4,7 @@
 
 inline void saveToEEPROM() {
     data.bpm = bpm;
+    data.viewMode = viewMode;
     for (int i = 0; i < NUM_CHANNELS; i++) {
         data.n[i] = channels[i].n;
         data.k[i] = channels[i].k;
@@ -22,6 +23,7 @@ inline void saveToEEPROM() {
 
 inline void applyData() {
     bpm = constrain(data.bpm, 1, 300);
+    viewMode = constrain(data.viewMode, 0, 1);
     for (int i = 0; i < NUM_CHANNELS; i++) {
         channels[i].n = constrain(data.n[i], 2, 32);
         channels[i].k = constrain(data.k[i], 0, 32);
@@ -38,9 +40,10 @@ inline void applyData() {
 }
 
 inline void factoryReset() {
-    // Новое магическое число для принудительного обновления
-    data.magic = 0xABCD1238; 
+    // Новое магическое число для принудительного обновления (добавлен viewMode)
+    data.magic = 0xABCD1239; 
     data.bpm = 120;
+    data.viewMode = 0; // По умолчанию Radial
     for (int i = 0; i < NUM_CHANNELS; i++) {
         data.n[i] = 16;
         data.k[i] = 4;

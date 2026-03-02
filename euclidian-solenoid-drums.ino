@@ -31,6 +31,8 @@ int menuIndex = 0;
 bool menuEditMode = false;
 unsigned long menuBlinkTimer = 0;
 
+int viewMode = 0; // Инициализация глобальной переменной
+
 // ==========================================
 // --- ЯДРО 0: ЛОГИКА ---
 // ==========================================
@@ -46,7 +48,7 @@ void setup() {
     EEPROM.begin(512);
     EEPROM.get(0, data);
     
-    if (data.magic != 0xABCD1237) {
+    if (data.magic != 0xABCD1239) {
         Serial.println("[EEPROM] Formatting for 4 channels...");
         factoryReset(); 
     } else {
@@ -145,7 +147,6 @@ void loop() {
             Serial.println("[UI] Enc Hold -> GLOBAL MENU");
         } 
         else if (currentScreen == SCREEN_CH_SETTINGS) {
-            // Сброс текущего пункта меню к НОВЫМ стандартным значениям
             Channel &ch = channels[activeChannel];
             if (menuIndex == 0) ch.velo = 127;
             else if (menuIndex == 1) ch.human = 0;
@@ -159,6 +160,7 @@ void loop() {
         } 
         else if (currentScreen == SCREEN_GLOBAL) {
             if (menuIndex == 0) bpm = 120;
+            else if (menuIndex == 1) viewMode = 0; // Сброс вида на radial
             triggerSave();
             needRedraw = true;
             Serial.println("[UI] Enc Hold -> RESET GLOBAL PARAM");
@@ -185,7 +187,7 @@ void loop() {
             if (currentTurnTime - lastTurnTime < ENC_ACCEL_THRESHOLD) {
                 stepNKR = ENC_FAST_STEP; 
                 stepBPM = BPM_FAST_STEP; 
-                stepMenu = 5; // Ускорение для меню (удобно для 0-127 и 0-255)
+                stepMenu = 5; 
             }
             
             if (currentScreen == SCREEN_MAIN) {
@@ -204,7 +206,7 @@ void loop() {
             } 
             else if (currentScreen == SCREEN_CH_SETTINGS) {
                 if (!menuEditMode) {
-                    menuIndex = constrain(menuIndex + dir, 0, 4); // 5 пунктов (0..4)
+                    menuIndex = constrain(menuIndex + dir, 0, 4); 
                 } else {
                     Channel &ch = channels[activeChannel];
                     if (menuIndex == 0) ch.velo = constrain(ch.velo + dir * stepMenu, 0, 127);
@@ -217,9 +219,10 @@ void loop() {
             } 
             else if (currentScreen == SCREEN_GLOBAL) {
                 if (!menuEditMode) {
-                    menuIndex = constrain(menuIndex + dir, 0, 2);
+                    menuIndex = constrain(menuIndex + dir, 0, 3); // Теперь 4 пункта (0..3)
                 } else {
                     if (menuIndex == 0) bpm = constrain(bpm + dir * stepBPM, 1, 300);
+                    else if (menuIndex == 1) viewMode = constrain(viewMode + dir, 0, 1); // Переключение view: 0 или 1
                     triggerSave();
                 }
             }
@@ -262,14 +265,11 @@ void loop() {
             if (channels[i].pattern[channels[i].currentStep] && !channels[i].isMuted) {
                 
                 int pwm = 0;
-                // Проверяем, находимся ли мы сейчас в режиме калибровки base для этого канала
                 bool isEditingBase = (currentScreen == SCREEN_CH_SETTINGS && menuIndex == 4 && menuEditMode && activeChannel == i);
 
                 if (isEditingBase) {
-                    // Во время калибровки подаем строго значение base (отключаем velo и human)
                     pwm = channels[i].base;
                 } else {
-                    // Обычный игровой режим
                     int min_v = max(0, channels[i].velo - channels[i].human);
                     int max_v = min(127, channels[i].velo + channels[i].human);
                     int actual_velo = random(min_v, max_v + 1); 
@@ -279,12 +279,10 @@ void loop() {
                     } else if (actual_velo >= 127) {
                         pwm = 255; 
                     } else {
-                        // Маппинг: MIDI velo (1..126) распределяется от откалиброванного base до 254
                         pwm = map(actual_velo, 1, 126, channels[i].base, 254);
                     }
                 }
 
-                // Логика физического вывода
                 if (pwm >= 255) {
                     digitalWrite(channels[i].solPin, HIGH); 
                 } else if (pwm == 0) {
@@ -302,7 +300,6 @@ void loop() {
 
     if (stepChanged && currentScreen == SCREEN_MAIN) needRedraw = true;
 
-    // Асинхронное выключение соленоидов
     for (int i = 0; i < NUM_CHANNELS; i++) {
         if (channels[i].solActive && (currentTime >= channels[i].solTurnOffTime)) {
             analogWrite(channels[i].solPin, 0); 

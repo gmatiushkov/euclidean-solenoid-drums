@@ -21,8 +21,9 @@ const int pinSW = 12;
 
 const int NUM_CHANNELS = 4;
 
-// Константы отрисовки
-const int centerX = 30; 
+// Константы отрисовки (для Radial View)
+// ИЗМЕНЕНО: Смещено на 3 пикселя вправо (было 30)
+const int centerX = 32; 
 const int centerY = 32;
 const int hitInRadius = 18; const int hitOutRadius = 28;
 const int stepInRadius = 22; const int stepOutRadius = 26;
@@ -46,11 +47,11 @@ struct Channel {
     bool isMuted = false; 
     
     // Музыкальные параметры
-    int velo = 127;     // Сила удара (MIDI: 0-127)
-    int human = 0;      // Рандомизация силы удара (MIDI: 0-127)
-    int shuffle = 0;    // Свинг (-50 до +50)
-    int pulse = 30;     // Длина импульса (мс)
-    int base = 150;     // Стартовое значение PWM (0-255)
+    int velo = 127;     
+    int human = 0;      
+    int shuffle = 0;    
+    int pulse = 30;     
+    int base = 150;     
 };
 
 struct SaveData {
@@ -66,6 +67,8 @@ struct SaveData {
     int shuffle[NUM_CHANNELS];
     int pulse[NUM_CHANNELS];
     int base[NUM_CHANNELS];
+    
+    int viewMode; // 0 = Radial, 1 = Linear
 };
 
 enum Mode { MODE_K, MODE_N, MODE_R, MODES_COUNT };
@@ -97,10 +100,11 @@ extern int bpm;
 extern unsigned long lastStepTime;
 extern unsigned long globalStepCounter;
 extern int currentMode;
-extern bool inBpmMode; 
 extern volatile bool needRedraw;
 extern unsigned long encHoldTimer;
 extern UI_State currentScreen;
 extern int menuIndex;
 extern bool menuEditMode;
 extern unsigned long menuBlinkTimer;
+
+extern int viewMode; // Текущий вид (0 - rad, 1 - lin)

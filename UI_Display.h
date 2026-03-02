@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-inline void drawMainScreen() {
+inline void drawRadialMainScreen() {
     Channel &ch = channels[activeChannel];
 
     float angleStep = 2.0 * M_PI / ch.n;
@@ -49,7 +49,8 @@ inline void drawMainScreen() {
     }
 
     oled.setScale(2);
-    int textX = 64; 
+    // Сдвинули столбик с параметрами ближе к правому краю (было 64, стало 76)
+    int textX = 73; 
 
     oled.setCursor(textX, 0);
     if (currentMode == MODE_K) oled.invertText(true);
@@ -70,6 +71,80 @@ inline void drawMainScreen() {
     oled.invertText(false);
 }
 
+inline void drawLinearMainScreen() {
+    Channel &chActive = channels[activeChannel];
+    
+    // ВЕРХНИЙ БЛОК: Вывод k, n, r на одной строке без двоеточий
+    oled.setScale(2);
+    
+    oled.setCursor(0, 0);
+    if (currentMode == MODE_K) oled.invertText(true);
+    oled.print("k"); oled.print(chActive.k); 
+    oled.invertText(false);
+
+    oled.setCursor(44, 0);
+    if (currentMode == MODE_N) oled.invertText(true);
+    oled.print("n"); oled.print(chActive.n); 
+    oled.invertText(false);
+
+    oled.setCursor(88, 0);
+    if (currentMode == MODE_R) oled.invertText(true);
+    oled.print("r"); oled.print(chActive.r); 
+    oled.invertText(false);
+    
+    oled.setScale(1); // Переключаемся на мелкий масштаб для линий
+    
+    // НИЖНИЙ БЛОК: Отрисовка 4-х каналов
+    for (int c = 0; c < NUM_CHANNELS; c++) {
+        Channel &ch = channels[c];
+        
+        int y_top = 17 + c * 11;
+        int y_bot = y_top + 9;
+        
+        // Индикатор активного канала (Треугольник)
+        if (c == activeChannel) {
+            for (int dx = 0; dx <= 4; dx++) {
+                oled.line(dx, y_top + 1 + dx, dx, y_bot - 1 - dx);
+            }
+        }
+        
+        // Если канал выключен - рисуем одну сплошную тонкую линию посередине
+        if (ch.isMuted) {
+            oled.line(8, y_top + 4, 127, y_top + 4);
+            continue;
+        }
+        
+        // Математика сегментов
+        for (int i = 0; i < ch.n; i++) {
+            int startX = 8 + (i * 118) / ch.n;
+            int endX = 8 + ((i + 1) * 118) / ch.n - 2; 
+            if (endX < startX) endX = startX;
+            
+            // 1. Отрисовка базового состояния отрезка
+            if (ch.pattern[i]) {
+                oled.rect(startX, y_top, endX, y_bot, OLED_FILL); // Удар: полностью залитый прямоугольник
+            } else {
+                oled.line(startX, y_top + 2, startX, y_bot - 2);  // Пауза: черточка строго в начале отрезка
+            }
+            
+            // 2. Отрисовка плейхеда поверх
+            if (i == ch.currentStep) {
+                if (ch.pattern[i]) {
+                    // Эффект рамки: вырезаем черным цветом внутреннюю часть прямоугольника, отступив 1 пиксель
+                    int innerStartX = startX + 1;
+                    int innerEndX = endX - 1;
+                    if (innerEndX < innerStartX) innerEndX = innerStartX; 
+                    
+                    oled.rect(innerStartX, y_top + 1, innerEndX, y_bot - 1, OLED_CLEAR);
+                } else {
+                    // На пустом участке рисуем залитый белый плейхед (ширина 3 пикселя)
+                    oled.rect(startX, y_top, startX + 2, y_bot, OLED_FILL);
+                }
+            }
+        }
+    }
+}
+
 inline void drawMenuList(const char* items[], int values[], int totalItems, int plusIndex) {
     int startIdx = menuIndex > 2 ? menuIndex - 2 : 0;
     if (startIdx > totalItems - 3) startIdx = totalItems - 3; 
@@ -82,7 +157,7 @@ inline void drawMenuList(const char* items[], int values[], int totalItems, int 
         bool isSelected = (itemIdx == menuIndex);
         
         char tempName[8];
-        strncpy(tempName, items[itemIdx], 6); // Берем до 6 символов (например shuffl)
+        strncpy(tempName, items[itemIdx], 6); 
         tempName[6] = '\0';
         strcat(tempName, ":");
         
@@ -96,7 +171,9 @@ inline void drawMenuList(const char* items[], int values[], int totalItems, int 
         oled.invertText(false);
         
         char valBuf[6];
-        if (itemIdx == plusIndex && values[itemIdx] > 0) {
+        if (strcmp(items[itemIdx], "view") == 0) {
+            snprintf(valBuf, sizeof(valBuf), "%s", values[itemIdx] == 0 ? "rad" : "lin");
+        } else if (itemIdx == plusIndex && values[itemIdx] > 0) {
             snprintf(valBuf, sizeof(valBuf), "+%d", values[itemIdx]);
         } else {
             snprintf(valBuf, sizeof(valBuf), "%d", values[itemIdx]);
@@ -133,30 +210,34 @@ inline void drawMenuList(const char* items[], int values[], int totalItems, int 
 inline void drawChannelMenu() {
     Channel &ch = channels[activeChannel];
     
+    oled.setScale(2);
     oled.setCursor(0, 0);
     oled.print("ch "); oled.print(activeChannel + 1); oled.print(" edit");
 
     const char* items[] = {"velo", "human", "shuff", "pulse", "base"};
     int values[] = {ch.velo, ch.human, ch.shuffle, ch.pulse, ch.base};
     
-    // Передаем 5, индекс плюса = 2 (shuffle)
     drawMenuList(items, values, 5, 2);
 }
 
 inline void drawGlobalMenu() {
+    oled.setScale(2);
     oled.setCursor(0, 0);
     oled.print("settings");
 
-    const char* items[] = {"bpm", "global a", "global b"};
-    int values[] = {bpm, 0, 0};
+    const char* items[] = {"bpm", "view", "global a", "global b"};
+    int values[] = {bpm, viewMode, 0, 0};
 
-    drawMenuList(items, values, 3, -1);
+    drawMenuList(items, values, 4, -1);
 }
 
 inline void drawInterface() {
     oled.clear();
     
-    if (currentScreen == SCREEN_MAIN) drawMainScreen();
+    if (currentScreen == SCREEN_MAIN) {
+        if (viewMode == 0) drawRadialMainScreen();
+        else drawLinearMainScreen();
+    }
     else if (currentScreen == SCREEN_CH_SETTINGS) drawChannelMenu();
     else if (currentScreen == SCREEN_GLOBAL) drawGlobalMenu();
     
