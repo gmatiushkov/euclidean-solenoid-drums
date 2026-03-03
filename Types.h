@@ -4,6 +4,8 @@
 #include <EncButton.h>
 #include <EEPROM.h>
 #include <math.h>
+#include <Adafruit_TinyUSB.h>
+#include <MIDI.h>
 
 // ==========================================
 // --- КОНСТАНТЫ И ПИНЫ ---
@@ -21,8 +23,6 @@ const int pinSW = 12;
 
 const int NUM_CHANNELS = 4;
 
-// Константы отрисовки (для Radial View)
-// ИЗМЕНЕНО: Смещено на 3 пикселя вправо (было 30)
 const int centerX = 32; 
 const int centerY = 32;
 const int hitInRadius = 18; const int hitOutRadius = 28;
@@ -46,12 +46,14 @@ struct Channel {
     unsigned long absoluteStep = 0; 
     bool isMuted = false; 
     
-    // Музыкальные параметры
     int velo = 127;     
     int human = 0;      
     int shuffle = 0;    
     int pulse = 30;     
     int base = 150;     
+    
+    byte midiPitch = 0;
+    byte midiChannel = 1;
 };
 
 struct SaveData {
@@ -69,6 +71,10 @@ struct SaveData {
     int base[NUM_CHANNELS];
     
     int viewMode; // 0 = Radial, 1 = Linear
+    
+    int midiState; 
+    byte midiPitch[NUM_CHANNELS];
+    byte midiChannel[NUM_CHANNELS];
 };
 
 enum Mode { MODE_K, MODE_N, MODE_R, MODES_COUNT };
@@ -76,7 +82,8 @@ enum Mode { MODE_K, MODE_N, MODE_R, MODES_COUNT };
 enum UI_State {
     SCREEN_MAIN,
     SCREEN_CH_SETTINGS,
-    SCREEN_GLOBAL
+    SCREEN_GLOBAL,
+    SCREEN_MIDI_LEARN
 };
 
 // ==========================================
@@ -107,4 +114,7 @@ extern int menuIndex;
 extern bool menuEditMode;
 extern unsigned long menuBlinkTimer;
 
-extern int viewMode; // Текущий вид (0 - rad, 1 - lin)
+extern int viewMode; 
+extern int midiState; // 0=off, 1=on, 2=set
+extern int midiLearnChannel;
+extern unsigned long midiDoneTimer;

@@ -49,7 +49,6 @@ inline void drawRadialMainScreen() {
     }
 
     oled.setScale(2);
-    // Сдвинули столбик с параметрами ближе к правому краю (было 64, стало 76)
     int textX = 73; 
 
     oled.setCursor(textX, 0);
@@ -74,9 +73,7 @@ inline void drawRadialMainScreen() {
 inline void drawLinearMainScreen() {
     Channel &chActive = channels[activeChannel];
     
-    // ВЕРХНИЙ БЛОК: Вывод k, n, r на одной строке без двоеточий
     oled.setScale(2);
-    
     oled.setCursor(0, 0);
     if (currentMode == MODE_K) oled.invertText(true);
     oled.print("k"); oled.print(chActive.k); 
@@ -92,52 +89,43 @@ inline void drawLinearMainScreen() {
     oled.print("r"); oled.print(chActive.r); 
     oled.invertText(false);
     
-    oled.setScale(1); // Переключаемся на мелкий масштаб для линий
+    oled.setScale(1); 
     
-    // НИЖНИЙ БЛОК: Отрисовка 4-х каналов
     for (int c = 0; c < NUM_CHANNELS; c++) {
         Channel &ch = channels[c];
         
         int y_top = 17 + c * 11;
         int y_bot = y_top + 9;
         
-        // Индикатор активного канала (Треугольник)
         if (c == activeChannel) {
             for (int dx = 0; dx <= 4; dx++) {
                 oled.line(dx, y_top + 1 + dx, dx, y_bot - 1 - dx);
             }
         }
         
-        // Если канал выключен - рисуем одну сплошную тонкую линию посередине
         if (ch.isMuted) {
             oled.line(8, y_top + 4, 127, y_top + 4);
             continue;
         }
         
-        // Математика сегментов
         for (int i = 0; i < ch.n; i++) {
             int startX = 8 + (i * 118) / ch.n;
             int endX = 8 + ((i + 1) * 118) / ch.n - 2; 
             if (endX < startX) endX = startX;
             
-            // 1. Отрисовка базового состояния отрезка
             if (ch.pattern[i]) {
-                oled.rect(startX, y_top, endX, y_bot, OLED_FILL); // Удар: полностью залитый прямоугольник
+                oled.rect(startX, y_top, endX, y_bot, OLED_FILL); 
             } else {
-                oled.line(startX, y_top + 2, startX, y_bot - 2);  // Пауза: черточка строго в начале отрезка
+                oled.line(startX, y_top + 2, startX, y_bot - 2);  
             }
             
-            // 2. Отрисовка плейхеда поверх
             if (i == ch.currentStep) {
                 if (ch.pattern[i]) {
-                    // Эффект рамки: вырезаем черным цветом внутреннюю часть прямоугольника, отступив 1 пиксель
                     int innerStartX = startX + 1;
                     int innerEndX = endX - 1;
                     if (innerEndX < innerStartX) innerEndX = innerStartX; 
-                    
                     oled.rect(innerStartX, y_top + 1, innerEndX, y_bot - 1, OLED_CLEAR);
                 } else {
-                    // На пустом участке рисуем залитый белый плейхед (ширина 3 пикселя)
                     oled.rect(startX, y_top, startX + 2, y_bot, OLED_FILL);
                 }
             }
@@ -148,6 +136,7 @@ inline void drawLinearMainScreen() {
 inline void drawMenuList(const char* items[], int values[], int totalItems, int plusIndex) {
     int startIdx = menuIndex > 2 ? menuIndex - 2 : 0;
     if (startIdx > totalItems - 3) startIdx = totalItems - 3; 
+    if (startIdx < 0) startIdx = 0;
 
     for (int i = 0; i < 3; i++) {
         int itemIdx = startIdx + i;
@@ -173,6 +162,10 @@ inline void drawMenuList(const char* items[], int values[], int totalItems, int 
         char valBuf[6];
         if (strcmp(items[itemIdx], "view") == 0) {
             snprintf(valBuf, sizeof(valBuf), "%s", values[itemIdx] == 0 ? "rad" : "lin");
+        } else if (strcmp(items[itemIdx], "midi") == 0) {
+            if (values[itemIdx] == 0) snprintf(valBuf, sizeof(valBuf), "off");
+            else if (values[itemIdx] == 1) snprintf(valBuf, sizeof(valBuf), "on");
+            else snprintf(valBuf, sizeof(valBuf), "set");
         } else if (itemIdx == plusIndex && values[itemIdx] > 0) {
             snprintf(valBuf, sizeof(valBuf), "+%d", values[itemIdx]);
         } else {
@@ -225,10 +218,26 @@ inline void drawGlobalMenu() {
     oled.setCursor(0, 0);
     oled.print("settings");
 
-    const char* items[] = {"bpm", "view", "global a", "global b"};
-    int values[] = {bpm, viewMode, 0, 0};
+    // Убрали плейсхолдеры. Оставили только 3 пункта.
+    const char* items[] = {"bpm", "view", "midi"};
+    int values[] = {bpm, viewMode, midiState};
 
-    drawMenuList(items, values, 4, -1);
+    drawMenuList(items, values, 3, -1);
+}
+
+inline void drawMidiLearnScreen() {
+    oled.setScale(2);
+    if (midiDoneTimer > 0) {
+        oled.setCursor(30, 3);
+        oled.print("done!");
+    } else {
+        oled.setCursor(0, 1);
+        oled.print("press key");
+        
+        oled.setCursor(0, 4);
+        oled.print("for ch ");
+        oled.print(midiLearnChannel + 1);
+    }
 }
 
 inline void drawInterface() {
@@ -240,6 +249,7 @@ inline void drawInterface() {
     }
     else if (currentScreen == SCREEN_CH_SETTINGS) drawChannelMenu();
     else if (currentScreen == SCREEN_GLOBAL) drawGlobalMenu();
+    else if (currentScreen == SCREEN_MIDI_LEARN) drawMidiLearnScreen();
     
     oled.update();
 }

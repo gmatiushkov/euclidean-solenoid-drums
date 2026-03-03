@@ -5,6 +5,8 @@
 inline void saveToEEPROM() {
     data.bpm = bpm;
     data.viewMode = viewMode;
+    data.midiState = (midiState == 2) ? 1 : midiState; // Сохраняем "set" как "on"
+    
     for (int i = 0; i < NUM_CHANNELS; i++) {
         data.n[i] = channels[i].n;
         data.k[i] = channels[i].k;
@@ -16,6 +18,9 @@ inline void saveToEEPROM() {
         data.shuffle[i] = channels[i].shuffle;
         data.pulse[i] = channels[i].pulse;
         data.base[i] = channels[i].base;
+        
+        data.midiPitch[i] = channels[i].midiPitch;
+        data.midiChannel[i] = channels[i].midiChannel;
     }
     EEPROM.put(0, data);
     EEPROM.commit(); 
@@ -24,6 +29,8 @@ inline void saveToEEPROM() {
 inline void applyData() {
     bpm = constrain(data.bpm, 1, 300);
     viewMode = constrain(data.viewMode, 0, 1);
+    midiState = constrain(data.midiState, 0, 1);
+    
     for (int i = 0; i < NUM_CHANNELS; i++) {
         channels[i].n = constrain(data.n[i], 2, 32);
         channels[i].k = constrain(data.k[i], 0, 32);
@@ -35,15 +42,19 @@ inline void applyData() {
         channels[i].shuffle = constrain(data.shuffle[i], -50, 50);
         channels[i].pulse = constrain(data.pulse[i], 1, 200);
         channels[i].base = constrain(data.base[i], 0, 255);
+        
+        channels[i].midiPitch = data.midiPitch[i];
+        channels[i].midiChannel = data.midiChannel[i];
         generateEuclidean(i);
     }
 }
 
 inline void factoryReset() {
-    // Новое магическое число для принудительного обновления (добавлен viewMode)
-    data.magic = 0xABCD1239; 
+    data.magic = 0xABCD123A; // Новое магическое число для MIDI
     data.bpm = 120;
-    data.viewMode = 0; // По умолчанию Radial
+    data.viewMode = 0; 
+    data.midiState = 0;
+    
     for (int i = 0; i < NUM_CHANNELS; i++) {
         data.n[i] = 16;
         data.k[i] = 4;
@@ -55,6 +66,9 @@ inline void factoryReset() {
         data.shuffle[i] = 0;
         data.pulse[i] = 30;
         data.base[i] = 150;
+        
+        data.midiPitch[i] = 48 + i; // По умолчанию: C3, C#3, D3, D#3
+        data.midiChannel[i] = 1;
     }
     applyData();
     saveToEEPROM();

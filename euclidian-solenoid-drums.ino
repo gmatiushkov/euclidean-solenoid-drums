@@ -3,6 +3,11 @@
 #include "Storage.h"
 #include "UI_Display.h"
 
+// Создаем два MIDI интерфейса
+Adafruit_USBD_MIDI usb_midi;
+MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, usb_midi, MIDI_USB);
+MIDI_CREATE_INSTANCE(HardwareSerial, Serial2, MIDI_HW);
+
 // ==========================================
 // --- ИНИЦИАЛИЗАЦИЯ ГЛОБАЛЬНЫХ ПЕРЕМЕННЫХ ---
 // ==========================================
@@ -31,7 +36,61 @@ int menuIndex = 0;
 bool menuEditMode = false;
 unsigned long menuBlinkTimer = 0;
 
-int viewMode = 0; // Инициализация глобальной переменной
+int viewMode = 0;
+int midiState = 0; 
+int midiLearnChannel = 0;
+unsigned long midiDoneTimer = 0;
+
+// ==========================================
+// --- ФУНКЦИИ СОЛЕНОИДОВ И MIDI ---
+// ==========================================
+void fireSolenoidDirect(int i, int pwm, unsigned long t) {
+    if (pwm >= 255) {
+        digitalWrite(channels[i].solPin, HIGH);
+    } else if (pwm == 0) {
+        digitalWrite(channels[i].solPin, LOW);
+    } else {
+        analogWrite(channels[i].solPin, pwm);
+    }
+    channels[i].solActive = true;
+    channels[i].solTurnOffTime = t + channels[i].pulse;
+}
+
+void fireSolenoidMidi(int i, int velo, unsigned long t) {
+    int pwm = (velo >= 127) ? 255 : map(velo, 1, 126, channels[i].base, 254);
+    fireSolenoidDirect(i, pwm, t);
+}
+
+void handleNoteOn(byte channel, byte pitch, byte velocity) {
+    if (velocity == 0) return;
+    
+    if (currentScreen == SCREEN_MIDI_LEARN) {
+        if (midiDoneTimer == 0 && midiLearnChannel < NUM_CHANNELS) {
+            channels[midiLearnChannel].midiChannel = channel;
+            channels[midiLearnChannel].midiPitch = pitch;
+            midiLearnChannel++;
+            needRedraw = true;
+            
+            if (midiLearnChannel >= NUM_CHANNELS) {
+                midiDoneTimer = millis();
+                midiState = 1; // Автоматически включаем MIDI после настройки
+                triggerSave();
+            }
+        }
+    } else if (midiState == 1) { 
+        unsigned long t = millis();
+        for (int i = 0; i < NUM_CHANNELS; i++) {
+            // Если нота и канал совпадают (или канал настроен на Omni - 0)
+            if (channels[i].midiPitch == pitch && (channels[i].midiChannel == channel || channels[i].midiChannel == 0)) {
+                if (!channels[i].isMuted) {
+                    fireSolenoidMidi(i, velocity, t);
+                }
+            }
+        }
+    }
+}
+
+void handleNoteOff(byte channel, byte pitch, byte velocity) { }
 
 // ==========================================
 // --- ЯДРО 0: ЛОГИКА ---
@@ -39,7 +98,7 @@ int viewMode = 0; // Инициализация глобальной перем�
 void setup() {
     Serial.begin(115200);
     delay(100);
-    Serial.println("\n--- Euclidean Drum Machine Boot (4 Channels) ---");
+    Serial.println("\n--- Euclidean Drum Machine Boot (4 Channels + MIDI) ---");
 
     pinMode(pinSW, INPUT_PULLUP);
     pinMode(pinDT, INPUT_PULLUP);
@@ -47,13 +106,12 @@ void setup() {
 
     EEPROM.begin(512);
     EEPROM.get(0, data);
-    
-    if (data.magic != 0xABCD1239) {
+    if (data.magic != 0xABCD123A) {
         Serial.println("[EEPROM] Formatting for 4 channels...");
-        factoryReset(); 
+        factoryReset();
     } else {
         Serial.println("[EEPROM] Loaded.");
-        applyData(); 
+        applyData();
     }
     
     btnEb.setHoldTimeout(HOLD_TIME); 
@@ -76,11 +134,37 @@ void setup() {
         channels[i].absoluteStep = 0;
     }
 
+    // --- MIDI SETUP ---
+    Serial2.setRX(9);
+    Serial2.setTX(8);
+    
+    MIDI_HW.turnThruOff();
+    MIDI_HW.setHandleNoteOn(handleNoteOn);
+    MIDI_HW.setHandleNoteOff(handleNoteOff);
+    MIDI_HW.begin(MIDI_CHANNEL_OMNI);
+
+    MIDI_USB.turnThruOff();
+    MIDI_USB.setHandleNoteOn(handleNoteOn);
+    MIDI_USB.setHandleNoteOff(handleNoteOff);
+    MIDI_USB.begin(MIDI_CHANNEL_OMNI);
+
     selectChannel(0); 
     Serial.println("--- Setup Complete ---");
 }
 
 void loop() {
+    MIDI_HW.read();
+    MIDI_USB.read();
+    
+    // Таймер выхода из режима обучения MIDI
+    if (currentScreen == SCREEN_MIDI_LEARN && midiDoneTimer > 0) {
+        if (millis() - midiDoneTimer > 1000) {
+            midiDoneTimer = 0;
+            currentScreen = SCREEN_GLOBAL;
+            needRedraw = true;
+        }
+    }
+
     eb.tick();
     btnCh1.tick();
     btnCh2.tick();
@@ -109,7 +193,7 @@ void loop() {
     if (btnCh1.hold()) { toggleMute(0); ch1WasHeld = true; }
     if (btnCh1.release()) {
         if (!ch1WasHeld && currentScreen != SCREEN_MAIN) { currentScreen = SCREEN_MAIN; needRedraw = true; }
-        ch1WasHeld = false; 
+        ch1WasHeld = false;
     }
     if (btnCh1.hasClicks(2)) { currentScreen = SCREEN_CH_SETTINGS; activeChannel = 0; menuIndex = 0; menuEditMode = false; needRedraw = true; }
 
@@ -143,8 +227,8 @@ void loop() {
     // --- УПРАВЛЕНИЕ ЭНКОДЕРОМ ---
     if (btnEb.hold()) {
         if (currentScreen == SCREEN_MAIN) {
-            currentScreen = SCREEN_GLOBAL; menuIndex = 0; menuEditMode = false; needRedraw = true;
-            Serial.println("[UI] Enc Hold -> GLOBAL MENU");
+            currentScreen = SCREEN_GLOBAL;
+            menuIndex = 0; menuEditMode = false; needRedraw = true;
         } 
         else if (currentScreen == SCREEN_CH_SETTINGS) {
             Channel &ch = channels[activeChannel];
@@ -156,22 +240,37 @@ void loop() {
             
             triggerSave();
             needRedraw = true;
-            Serial.println("[UI] Enc Hold -> RESET PARAM TO DEFAULT");
         } 
         else if (currentScreen == SCREEN_GLOBAL) {
             if (menuIndex == 0) bpm = 120;
-            else if (menuIndex == 1) viewMode = 0; // Сброс вида на radial
+            else if (menuIndex == 1) viewMode = 0; 
+            else if (menuIndex == 2) midiState = 0;
             triggerSave();
             needRedraw = true;
-            Serial.println("[UI] Enc Hold -> RESET GLOBAL PARAM");
         }
     }
 
     if (btnEb.click()) {
         if (currentScreen == SCREEN_MAIN) {
-            currentMode = (currentMode + 1) % MODES_COUNT; needRedraw = true; triggerSave();
-        } else {
-            menuEditMode = !menuEditMode; 
+            currentMode = (currentMode + 1) % MODES_COUNT;
+            needRedraw = true; triggerSave();
+        } 
+        else if (currentScreen == SCREEN_GLOBAL) {
+            // Перехватываем клик по 'set' для запуска обучения
+            if (menuEditMode && menuIndex == 2 && midiState == 2) {
+                menuEditMode = false;
+                currentScreen = SCREEN_MIDI_LEARN;
+                midiLearnChannel = 0;
+                midiDoneTimer = 0;
+                needRedraw = true;
+            } else {
+                menuEditMode = !menuEditMode;
+                menuBlinkTimer = millis();
+                needRedraw = true;
+            }
+        }
+        else {
+            menuEditMode = !menuEditMode;
             menuBlinkTimer = millis();
             needRedraw = true;
         }
@@ -185,28 +284,28 @@ void loop() {
 
         if (currentTurnTime - lastTurnTime > ENC_DEBOUNCE_MS) {
             if (currentTurnTime - lastTurnTime < ENC_ACCEL_THRESHOLD) {
-                stepNKR = ENC_FAST_STEP; 
+                stepNKR = ENC_FAST_STEP;
                 stepBPM = BPM_FAST_STEP; 
                 stepMenu = 5; 
             }
             
             if (currentScreen == SCREEN_MAIN) {
-                Channel &ch = channels[activeChannel]; 
+                Channel &ch = channels[activeChannel];
                 if (currentMode == MODE_N) {
                     ch.n = constrain(ch.n + dir * stepNKR, 2, 32);
                     if (ch.k > ch.n) ch.k = ch.n;
-                    if (ch.r >= ch.n) ch.r = ch.n - 1; 
+                    if (ch.r >= ch.n) ch.r = ch.n - 1;
                 } else if (currentMode == MODE_K) {
                     ch.k = constrain(ch.k + dir * stepNKR, 0, ch.n);
                 } else if (currentMode == MODE_R) {
-                    ch.r = constrain(ch.r + dir * stepNKR, 0, ch.n - 1); 
+                    ch.r = constrain(ch.r + dir * stepNKR, 0, ch.n - 1);
                 }
                 generateEuclidean(activeChannel); 
                 triggerSave();
             } 
             else if (currentScreen == SCREEN_CH_SETTINGS) {
                 if (!menuEditMode) {
-                    menuIndex = constrain(menuIndex + dir, 0, 4); 
+                    menuIndex = constrain(menuIndex + dir, 0, 4);
                 } else {
                     Channel &ch = channels[activeChannel];
                     if (menuIndex == 0) ch.velo = constrain(ch.velo + dir * stepMenu, 0, 127);
@@ -219,10 +318,12 @@ void loop() {
             } 
             else if (currentScreen == SCREEN_GLOBAL) {
                 if (!menuEditMode) {
-                    menuIndex = constrain(menuIndex + dir, 0, 3); // Теперь 4 пункта (0..3)
+                    // ИЗМЕНЕНИЕ ЗДЕСЬ: Максимальный индекс теперь 2 (так как пунктов 3)
+                    menuIndex = constrain(menuIndex + dir, 0, 2); 
                 } else {
                     if (menuIndex == 0) bpm = constrain(bpm + dir * stepBPM, 1, 300);
-                    else if (menuIndex == 1) viewMode = constrain(viewMode + dir, 0, 1); // Переключение view: 0 или 1
+                    else if (menuIndex == 1) viewMode = constrain(viewMode + dir, 0, 1);
+                    else if (menuIndex == 2) midiState = constrain(midiState + dir, 0, 2);
                     triggerSave();
                 }
             }
@@ -240,7 +341,7 @@ void loop() {
     // --- ГЛОБАЛЬНЫЙ СЕКВЕНСОР ---
     unsigned long currentTime = millis();
     unsigned long baseInterval = 60000 / (bpm * 4);
-    bool stepChanged = false; 
+    bool stepChanged = false;
 
     for (int i = 0; i < NUM_CHANNELS; i++) {
         long safeShuffle = constrain(channels[i].shuffle, -50, 50);
@@ -254,7 +355,7 @@ void loop() {
             if (elapsed > baseInterval * 3) {
                 channels[i].lastStepTime = currentTime;
             } else {
-                channels[i].lastStepTime += dynamicInterval; 
+                channels[i].lastStepTime += dynamicInterval;
             }
             
             channels[i].absoluteStep++;
@@ -264,45 +365,35 @@ void loop() {
             
             if (channels[i].pattern[channels[i].currentStep] && !channels[i].isMuted) {
                 
-                int pwm = 0;
                 bool isEditingBase = (currentScreen == SCREEN_CH_SETTINGS && menuIndex == 4 && menuEditMode && activeChannel == i);
-
                 if (isEditingBase) {
-                    pwm = channels[i].base;
+                    fireSolenoidDirect(i, channels[i].base, currentTime);
                 } else {
                     int min_v = max(0, channels[i].velo - channels[i].human);
                     int max_v = min(127, channels[i].velo + channels[i].human);
-                    int actual_velo = random(min_v, max_v + 1); 
+                    int actual_velo = random(min_v, max_v + 1);
                     
+                    int pwm = 0;
                     if (actual_velo == 0) {
-                        pwm = 0; 
+                        pwm = 0;
                     } else if (actual_velo >= 127) {
-                        pwm = 255; 
+                        pwm = 255;
                     } else {
                         pwm = map(actual_velo, 1, 126, channels[i].base, 254);
                     }
+                    fireSolenoidDirect(i, pwm, currentTime);
                 }
-
-                if (pwm >= 255) {
-                    digitalWrite(channels[i].solPin, HIGH); 
-                } else if (pwm == 0) {
-                    digitalWrite(channels[i].solPin, LOW); 
-                } else {
-                    analogWrite(channels[i].solPin, pwm); 
-                }
-                
-                channels[i].solActive = true;
-                channels[i].solTurnOffTime = currentTime + channels[i].pulse;
             }
-            stepChanged = true; 
+            stepChanged = true;
         }
     }
 
     if (stepChanged && currentScreen == SCREEN_MAIN) needRedraw = true;
-
+    
+    // --- ВЫКЛЮЧЕНИЕ СОЛЕНОИДОВ ПО ТАЙМЕРУ ---
     for (int i = 0; i < NUM_CHANNELS; i++) {
         if (channels[i].solActive && (currentTime >= channels[i].solTurnOffTime)) {
-            analogWrite(channels[i].solPin, 0); 
+            analogWrite(channels[i].solPin, 0);
             digitalWrite(channels[i].solPin, LOW); 
             channels[i].solActive = false;
         }
@@ -321,8 +412,7 @@ void setup1() {
 }
 
 void loop1() {
-    if (menuEditMode) needRedraw = true; 
-    
+    if (menuEditMode) needRedraw = true;
     if (needRedraw) {
         needRedraw = false; 
         drawInterface();
