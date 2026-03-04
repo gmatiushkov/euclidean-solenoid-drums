@@ -115,7 +115,7 @@ void setup() {
 
     EEPROM.begin(512);
     EEPROM.get(0, data);
-    if (data.magic != 0xABCD123A) {
+    if (data.magic != 0xABCD123B) {
         Serial.println("[EEPROM] Formatting for 4 channels...");
         factoryReset();
     } else {
