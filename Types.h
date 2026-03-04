@@ -50,7 +50,8 @@ struct Channel {
     int human = 0;      
     int shuffle = 0;    
     int pulse = 30;     
-    int base = 150;     
+    int base = 150;
+    int midiVelo = 1;   // НОВОЕ: 1 = on (по умолчанию), 0 = off     
     
     byte midiPitch = 0;
     byte midiChannel = 1;
@@ -69,6 +70,7 @@ struct SaveData {
     int shuffle[NUM_CHANNELS];
     int pulse[NUM_CHANNELS];
     int base[NUM_CHANNELS];
+    int midiVelo[NUM_CHANNELS];
     
     int viewMode; // 0 = Radial, 1 = Linear
     

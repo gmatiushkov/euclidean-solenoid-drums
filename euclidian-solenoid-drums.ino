@@ -80,10 +80,19 @@ void handleNoteOn(byte channel, byte pitch, byte velocity) {
     } else if (midiState == 1) { 
         unsigned long t = millis();
         for (int i = 0; i < NUM_CHANNELS; i++) {
-            // Если нота и канал совпадают (или канал настроен на Omni - 0)
             if (channels[i].midiPitch == pitch && (channels[i].midiChannel == channel || channels[i].midiChannel == 0)) {
                 if (!channels[i].isMuted) {
-                    fireSolenoidMidi(i, velocity, t);
+                    
+                    // НОВЫЙ БЛОК ЛОГИКИ MIDI VELOCITY
+                    int actual_velo = velocity;
+                    if (channels[i].midiVelo == 0) { 
+                        // Игнорируем входящий velocity, применяем параметры канала
+                        int min_v = max(0, channels[i].velo - channels[i].human);
+                        int max_v = min(127, channels[i].velo + channels[i].human);
+                        actual_velo = random(min_v, max_v + 1);
+                    }
+                    
+                    fireSolenoidMidi(i, actual_velo, t);
                 }
             }
         }
@@ -235,12 +244,13 @@ void loop() {
             if (menuIndex == 0) ch.velo = 127;
             else if (menuIndex == 1) ch.human = 0;
             else if (menuIndex == 2) ch.shuffle = 0;
-            else if (menuIndex == 3) ch.pulse = 30;
-            else if (menuIndex == 4) ch.base = 150;
+            else if (menuIndex == 3) ch.midiVelo = 1; // НОВОЕ (включаем по дефолту)
+            else if (menuIndex == 4) ch.pulse = 30;   // Сдвинуто
+            else if (menuIndex == 5) ch.base = 150;   // Сдвинуто
             
             triggerSave();
             needRedraw = true;
-        } 
+        }
         else if (currentScreen == SCREEN_GLOBAL) {
             if (menuIndex == 0) bpm = 120;
             else if (menuIndex == 1) viewMode = 0; 
@@ -305,17 +315,18 @@ void loop() {
             } 
             else if (currentScreen == SCREEN_CH_SETTINGS) {
                 if (!menuEditMode) {
-                    menuIndex = constrain(menuIndex + dir, 0, 4);
+                    menuIndex = constrain(menuIndex + dir, 0, 5); // ИЗМЕНЕНО: макс. индекс теперь 5
                 } else {
                     Channel &ch = channels[activeChannel];
                     if (menuIndex == 0) ch.velo = constrain(ch.velo + dir * stepMenu, 0, 127);
                     else if (menuIndex == 1) ch.human = constrain(ch.human + dir * stepMenu, 0, 127);
                     else if (menuIndex == 2) ch.shuffle = constrain(ch.shuffle + dir * stepMenu, -50, 50);
-                    else if (menuIndex == 3) ch.pulse = constrain(ch.pulse + dir * stepMenu, 1, 200);
-                    else if (menuIndex == 4) ch.base = constrain(ch.base + dir * stepMenu, 0, 255);
+                    else if (menuIndex == 3) ch.midiVelo = constrain(ch.midiVelo + dir, 0, 1); // НОВОЕ
+                    else if (menuIndex == 4) ch.pulse = constrain(ch.pulse + dir * stepMenu, 1, 200); // Сдвинуто
+                    else if (menuIndex == 5) ch.base = constrain(ch.base + dir * stepMenu, 0, 255);   // Сдвинуто
                     triggerSave();
                 }
-            } 
+            }
             else if (currentScreen == SCREEN_GLOBAL) {
                 if (!menuEditMode) {
                     // ИЗМЕНЕНИЕ ЗДЕСЬ: Максимальный индекс теперь 2 (так как пунктов 3)
@@ -365,7 +376,8 @@ void loop() {
             
             if (channels[i].pattern[channels[i].currentStep] && !channels[i].isMuted) {
                 
-                bool isEditingBase = (currentScreen == SCREEN_CH_SETTINGS && menuIndex == 4 && menuEditMode && activeChannel == i);
+                // ИЗМЕНЕНО: menuIndex == 4 заменен на menuIndex == 5
+                bool isEditingBase = (currentScreen == SCREEN_CH_SETTINGS && menuIndex == 5 && menuEditMode && activeChannel == i);
                 if (isEditingBase) {
                     fireSolenoidDirect(i, channels[i].base, currentTime);
                 } else {

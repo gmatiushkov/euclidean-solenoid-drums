@@ -18,6 +18,7 @@ inline void saveToEEPROM() {
         data.shuffle[i] = channels[i].shuffle;
         data.pulse[i] = channels[i].pulse;
         data.base[i] = channels[i].base;
+        data.midiVelo[i] = channels[i].midiVelo;
         
         data.midiPitch[i] = channels[i].midiPitch;
         data.midiChannel[i] = channels[i].midiChannel;
@@ -42,6 +43,7 @@ inline void applyData() {
         channels[i].shuffle = constrain(data.shuffle[i], -50, 50);
         channels[i].pulse = constrain(data.pulse[i], 1, 200);
         channels[i].base = constrain(data.base[i], 0, 255);
+        channels[i].midiVelo = constrain(data.midiVelo[i], 0, 1);
         
         channels[i].midiPitch = data.midiPitch[i];
         channels[i].midiChannel = data.midiChannel[i];
@@ -50,7 +52,7 @@ inline void applyData() {
 }
 
 inline void factoryReset() {
-    data.magic = 0xABCD123A; // Новое магическое число для MIDI
+    data.magic = 0xABCD123B; 
     data.bpm = 120;
     data.viewMode = 0; 
     data.midiState = 0;
@@ -66,6 +68,7 @@ inline void factoryReset() {
         data.shuffle[i] = 0;
         data.pulse[i] = 30;
         data.base[i] = 150;
+        data.midiVelo[i] = 1;
         
         data.midiPitch[i] = 48 + i; // По умолчанию: C3, C#3, D3, D#3
         data.midiChannel[i] = 1;

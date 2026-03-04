@@ -166,6 +166,8 @@ inline void drawMenuList(const char* items[], int values[], int totalItems, int 
             if (values[itemIdx] == 0) snprintf(valBuf, sizeof(valBuf), "off");
             else if (values[itemIdx] == 1) snprintf(valBuf, sizeof(valBuf), "on");
             else snprintf(valBuf, sizeof(valBuf), "set");
+        } else if (strcmp(items[itemIdx], "m.vel") == 0) {
+            snprintf(valBuf, sizeof(valBuf), "%s", values[itemIdx] == 1 ? "on" : "off"); // НОВОЕ
         } else if (itemIdx == plusIndex && values[itemIdx] > 0) {
             snprintf(valBuf, sizeof(valBuf), "+%d", values[itemIdx]);
         } else {
@@ -207,10 +209,11 @@ inline void drawChannelMenu() {
     oled.setCursor(0, 0);
     oled.print("ch "); oled.print(activeChannel + 1); oled.print(" edit");
 
-    const char* items[] = {"velo", "human", "shuff", "pulse", "base"};
-    int values[] = {ch.velo, ch.human, ch.shuffle, ch.pulse, ch.base};
+    // ИЗМЕНЕНО: Добавлен m.vel, увеличено количество элементов до 6
+    const char* items[] = {"velo", "human", "shuff", "m.vel", "pulse", "base"};
+    int values[] = {ch.velo, ch.human, ch.shuffle, ch.midiVelo, ch.pulse, ch.base};
     
-    drawMenuList(items, values, 5, 2);
+    drawMenuList(items, values, 6, 2); // 6 - размер меню, 2 - индекс shuff (остался прежним)
 }
 
 inline void drawGlobalMenu() {
